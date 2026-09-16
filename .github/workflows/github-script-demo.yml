@@ -10,28 +10,62 @@ jobs:
 
     steps:
 
-    - name: Comment on new issue
-      uses: actions/github-script@0.8.0
-      with:
-        github-token: ${{secrets.GITHUB_TOKEN}}
+      - name: Comment on new issue
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-        script: |
-          github.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: "🎉 You've created this issue comment using GitHub Script!!!"
-          })
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "🎉 You've created this issue comment using GitHub Script!!!"
+            })
 
-    - name: Add issue to project board
-      if: contains(github.event.issue.labels.*.name, 'bug')
-      uses: actions/github-script@0.8.0
-      with:
-        github-token: ${{secrets.GITHUB_TOKEN}}
+      - name: Add issue to project
+        if: contains(github.event.issue.labels.*.name, 'bug')
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_NUMBER: 1
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+        run: |
 
-        script: |
-          github.projects.createCard({
-            column_id: {{columnID}},
-            content_id: context.payload.issue.id,
-            content_type: "Issue"
-          });
+          # Get the project ID
+          PROJECT_ID=$(gh api graphql \
+            -f query='
+              query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                  }
+                }
+              }
+            ' \
+            -f owner="${{ github.repository_owner }}" \
+            -F number=$PROJECT_NUMBER \
+            --jq '.data.user.projectV2.id')
+
+          echo "Project ID: $PROJECT_ID"
+
+          # Add issue to project
+          ITEM_ID=$(gh api graphql \
+            -f query='
+              mutation($project: ID!, $issue: ID!) {
+                addProjectV2ItemById(
+                  input: {
+                    projectId: $project
+                    contentId: $issue
+                  }
+                ) {
+                  item {
+                    id
+                  }
+                }
+              }
+            ' \
+            -f project="$PROJECT_ID" \
+            -f issue="$ISSUE_NODE_ID" \
+            --jq '.data.addProjectV2ItemById.item.id')
+
+          echo "Item ID: $ITEM_ID"
