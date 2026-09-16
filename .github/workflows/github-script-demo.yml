@@ -9,18 +9,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        
       - name: Comment on new issue
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
+          
           script: |
+            const fs = require('fs')
+
+            const issueBody =
+              fs.readFileSync(
+                ".github/ISSUE_RESPONSES/comment.md",
+                "utf8"
+              )
+                      
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: "🎉 You've created this issue comment using GitHub Script!!!"
+              body: issueBody
             })
 
       - name: Add issue to project
